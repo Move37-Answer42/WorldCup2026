@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>World Cup 2026 · Wayne × Tommy</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0a0f0d;color:#e8f5e9;font-family:'DM Mono','Courier New',monospace}
+    ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#1e4d2b;border-radius:2px}
+    .card{transition:all .2s;border:1px solid #1a2e1f}
+    .card:hover{border-color:#2d7a45;transform:translateY(-1px)}
+    .btn{transition:opacity .15s;cursor:pointer;border:none}
+    .btn:hover{opacity:.8}
+    input,select{outline:none}
+    input::placeholder{color:#3d6b4a}
+    .shimmer{animation:sh 1.5s infinite linear;background:linear-gradient(90deg,#0a1a0f 25%,#1a3a24 50%,#0a1a0f 75%);background-size:200% 100%}
+    @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .spin{display:inline-block;animation:sp 1s linear infinite}
+    @keyframes sp{to{transform:rotate(360deg)}}
+    .blink{animation:bl 2s ease-in-out infinite}
+    @keyframes bl{0%,100%{opacity:.4}50%{opacity:1}}
+    .scout-section{background:#0d1a10;border:1px solid #1a3a24;border-radius:10px;padding:18px;margin-bottom:16px}
+    .scout-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+    .tag{font-size:9px;letter-spacing:2px;border-radius:3px;padding:2px 8px}
+    .dash-stat{background:#0d1a10;border:1px solid #1a2e1f;border-radius:8px;padding:14px 16px;flex:1;min-width:130px}
+    .dash-label{font-size:9px;letter-spacing:3px;color:#3d6b4a;margin-bottom:6px}
+    .dash-val{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:1px;line-height:1}
+    .dash-sub{font-size:9px;color:#3d6b4a;margin-top:4px;letter-spacing:1px}
+    .pool-bar-wrap{margin-top:20px}
+    .section-title{font-family:'Bebas Neue',sans-serif;font-size:20px;color:#c8f5d4;letter-spacing:2px;margin-bottom:12px}
+    .bet-row{background:#0d1a10;border-radius:8px;padding:14px 16px;margin-bottom:8px;border:1px solid #1a2e1f;transition:border-color .2s}
+    .bet-row:hover{border-color:#2d7a45}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const CATEGORIES = ["Outright Winner", "Long Shot", "Group Stage", "Parlay"];
+const PLATFORMS = ["DraftKings", "FanDuel", "BetMGM", "Caesars", "PointsBet", "Other"];
+const STATUSES = ["Pending", "Placed", "Won", "Lost", "Cashed Out"];
+const STATUS_COLORS = { Pending:"#f59e0b", Placed:"#3b82f6", Won:"#10b981", Lost:"#ef4444", "Cashed Out":"#8b5cf6" };
+const CATEGORY_ICONS = { "Outright Winner":"🏆", "Long Shot":"🚀", "Group Stage":"⚽", "Parlay":"🔗" };
+const RISK_COLORS = { Low:"#10b981", Medium:"#f59e0b", High:"#ef4444", Degen:"#8b5cf6" };
+const EDGE_COLORS = { High:"#10b981", Medium:"#f59e0b", Speculative:"#8b5cf6" };
+const DIR_COLORS = { BET:"#10b981", FADE:"#ef4444", NEUTRAL:"#3d6b4a" };
+const STORAGE_KEY = "wc2026-bets-v3";
+const FUNDS_KEY   = "wc2026-funds-v1";
+const NAME_KEY    = "wc2026-username";
+const PLAYERS = ["Wayne", "Tommy"];
+
+const INITIAL_BETS = [
+  {id:1,category:"Outright Winner",team:"Spain",description:"To win the World Cup",odds:"+550",stake:15,platform:"DraftKings",status:"Pending",note:"Reigning Euro champs, #1 ranked"},
+  {id:2,category:"Outright Winner",team:"England",description:"To win the World Cup",odds:"+700",stake:20,platform:"FanDuel",status:"Pending",note:"Under Tuchel — finally their year?"},
+  {id:3,category:"Outright Winner",team:"Brazil",description:"To win the World Cup",odds:"+800",stake:15,platform:"DraftKings",status:"Pending",note:"Best South American value"},
+  {id:4,category:"Long Shot",team:"Norway",description:"To win the World Cup",odds:"+2200",stake:10,platform:"BetMGM",status:"Pending",note:"Haaland + Odegaard — went 8-0 in qualifying"},
+  {id:5,category:"Long Shot",team:"Colombia",description:"To win the World Cup",odds:"+4000",stake:10,platform:"BetMGM",status:"Pending",note:"Luis Díaz on fire at Bayern"},
+  {id:6,category:"Long Shot",team:"Ecuador",description:"To win the World Cup",odds:"+6600",stake:10,platform:"BetMGM",status:"Pending",note:"Pure lottery — conceded 5 goals all qualifying"},
+  {id:7,category:"Long Shot",team:"Portugal",description:"To win the World Cup",odds:"+1400",stake:10,platform:"FanDuel",status:"Pending",note:"Value at this price"},
+];
+
+const BASE_PARLAYS = [
+  {id:1,name:"The European Lock",riskLevel:"Low",legs:["Spain to win Group B","England to win their group","France to advance from group stage"],estimatedOdds:"+420",suggestedStake:15,platform:"DraftKings",rationale:"Three elite European sides all heavily favored to advance."},
+  {id:2,name:"Haaland's Rampage",riskLevel:"Medium",legs:["Norway to reach Round of 16","Erling Haaland anytime scorer (Group Stage)","Norway to win their group"],estimatedOdds:"+900",suggestedStake:10,platform:"FanDuel",rationale:"Norway went 8-0 in qualifying. Haaland fires, they could shock the group."},
+  {id:3,name:"South American Chaos",riskLevel:"High",legs:["Argentina eliminated before QF","Colombia to reach QF","Brazil to top their group"],estimatedOdds:"+1800",suggestedStake:8,platform:"BetMGM",rationale:"Argentina's defense has cracks. Colombia with Díaz is a nightmare matchup."},
+  {id:4,name:"The Dark Horse Triple",riskLevel:"Degen",legs:["Norway to reach QF","Ecuador to reach Round of 16","Colombia to beat a top-8 nation"],estimatedOdds:"+3500",suggestedStake:5,platform:"Caesars",rationale:"Pure chaos parlay — three well-organized sides nobody wants to face."},
+  {id:5,name:"Golden Boot Special",riskLevel:"High",legs:["Lamine Yamal top 3 scorer","Spain to win the tournament","Spain vs England Final"],estimatedOdds:"+2200",suggestedStake:7,platform:"DraftKings",rationale:"Spain vs England final is realistic. Yamal at 18 could be the breakout star."},
+];
+
+function calcPayout(stake, odds) {
+  const o = parseInt(odds);
+  if (isNaN(o) || !stake) return 0;
+  return o > 0 ? +(stake * (o / 100)).toFixed(2) : +(stake * (100 / Math.abs(o))).toFixed(2);
+}
+
+function parseJSON(raw) {
+  const clean = raw.replace(/```json/gi,"").replace(/```/g,"").trim();
+  try { return JSON.parse(clean); } catch {}
+  const s = clean.indexOf("["), e = clean.lastIndexOf("]");
+  if (s !== -1 && e > s) { try { return JSON.parse(clean.slice(s, e+1)); } catch {} }
+  return null;
+}
+
+const API_KEY_STORAGE = "wc2026-apikey";
+
+async function callAI(system, user, search=true) {
+  const apiKey = localStorage.getItem(API_KEY_STORAGE) || "";
+  const body = { model:"claude-sonnet-4-20250514", max_tokens:1200, system, messages:[{role:"user",content:user}] };
+  if (search) body.tools = [{type:"web_search_20250305",name:"web_search"}];
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{"Content-Type":"application/json", "x-api-key": apiKey, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.content?.filter(c=>c.type==="text").map(c=>c.text).join("") || "";
+}
+
+let localNextId = 8;
+
+// ─── Pool math ────────────────────────────────────────────────────────────────
+// Pool = total deposits - money spent + money returned from wins/cashouts
+function calcPool(bets, totalDeposited) {
+  const spent     = bets.filter(b=>["Placed","Won","Lost","Cashed Out"].includes(b.status)).reduce((s,b)=>s+(parseFloat(b.stake)||0),0);
+  const returned  = bets.filter(b=>["Won","Cashed Out"].includes(b.status)).reduce((s,b)=>s+(parseFloat(b.stake)||0)+calcPayout(parseFloat(b.stake),b.odds),0);
+  const atRisk    = bets.filter(b=>b.status==="Placed").reduce((s,b)=>s+(parseFloat(b.stake)||0),0);
+  const settled   = bets.filter(b=>["Won","Lost","Cashed Out"].includes(b.status)).reduce((s,b)=>s+(parseFloat(b.stake)||0),0);
+  const pnl       = returned - settled;
+  const pool      = totalDeposited - spent + returned;
+  return { spent, returned, atRisk, pnl, pool };
+}
+
+// ─── Bet card (shared) ────────────────────────────────────────────────────────
+function BetCard({ bet, onStatus, onEdit, onDelete, compact }) {
+  const payout = calcPayout(parseFloat(bet.stake), bet.odds);
+  const sc = STATUS_COLORS[bet.status];
+  return (
+    <div className="bet-row">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+        <div style={{flex:1,minWidth:160}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,letterSpacing:2,color:"#2d7a45"}}>{CATEGORY_ICONS[bet.category]} {bet.category.toUpperCase()}</span>
+            <span className="tag" style={{background:sc+"22",color:sc,border:`1px solid ${sc}44`}}>{bet.status.toUpperCase()}</span>
+          </div>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:"#c8f5d4",letterSpacing:1}}>{bet.team}</div>
+          <div style={{fontSize:11,color:"#5a8f6a",marginTop:1}}>{bet.description}</div>
+          {bet.note&&<div style={{fontSize:10,color:"#3d6b4a",marginTop:3,fontStyle:"italic"}}>"{bet.note}"</div>}
+          <div style={{marginTop:6,fontSize:10,color:"#3d6b4a",letterSpacing:1}}>📍 {bet.platform}</div>
+        </div>
+        <div style={{textAlign:"right",minWidth:105}}>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,color:parseInt(bet.odds)>0?"#10b981":"#f59e0b",letterSpacing:1}}>{bet.odds}</div>
+          <div style={{fontSize:11,color:"#5a8f6a"}}>Stake: <span style={{color:"#c8f5d4"}}>${bet.stake}</span></div>
+          <div style={{fontSize:11,color:"#5a8f6a"}}>Win: <span style={{color:"#10b981"}}>+${payout.toFixed(2)}</span></div>
+          <div style={{fontSize:11,color:"#5a8f6a"}}>Total: <span style={{color:"#a7d9b4"}}>${(payout+parseFloat(bet.stake)).toFixed(2)}</span></div>
+        </div>
+      </div>
+      {!compact && (
+        <div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}>
+          <select value={bet.status} onChange={e=>onStatus(bet.id,e.target.value)}
+            style={{background:"#0a1a0f",border:"1px solid #1a3a24",color:sc,borderRadius:4,padding:"4px 8px",fontSize:10,fontFamily:"inherit",cursor:"pointer"}}>
+            {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+          <button onClick={()=>onEdit(bet)} className="btn" style={{background:"#1a3a24",color:"#c8f5d4",borderRadius:4,padding:"4px 12px",fontSize:10,letterSpacing:1,fontFamily:"inherit"}}>EDIT</button>
+          <button onClick={()=>onDelete(bet.id)} className="btn" style={{background:"#2a0f0f",color:"#ef4444",borderRadius:4,padding:"4px 12px",fontSize:10,letterSpacing:1,fontFamily:"inherit"}}>REMOVE</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+function App() {
+  const [bets, setBets] = useState([]);
+  const [deposits, setDeposits] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [userName, setUserName] = useState("");
+  const [nameInput, setNameInput] = useState("");
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [showFundsModal, setShowFundsModal] = useState(false);
+  const [fundsPerson, setFundsPerson] = useState("");
+  const [fundsAmount, setFundsAmount] = useState("");
+  const [showApiModal, setShowApiModal] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [apiKeySaved, setApiKeySaved] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editingBet, setEditingBet] = useState(null);
+  const [activeCategory, setActiveCategory] = useState("All");
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [parlays] = useState(BASE_PARLAYS);
+  const [form, setForm] = useState({category:"Outright Winner",team:"",description:"",odds:"",stake:"",platform:"DraftKings",status:"Pending",note:""});
+  const [toast, setToast] = useState("");
+
+  // Scout
+  const [oddsRefresh,setOddsRefresh]=useState([]);  const [oddsLoading,setOddsLoading]=useState(false);  const [oddsTs,setOddsTs]=useState(null);
+  const [topPlays,setTopPlays]=useState([]);         const [topLoading,setTopLoading]=useState(false);    const [topTs,setTopTs]=useState(null);
+  const [polyData,setPolyData]=useState([]);         const [polyLoading,setPolyLoading]=useState(false);  const [polyTs,setPolyTs]=useState(null);
+
+  useEffect(()=>{
+    const name = localStorage.getItem(NAME_KEY);
+    if (name) setUserName(name); else setShowNameModal(true);
+    const savedKey = localStorage.getItem(API_KEY_STORAGE);
+    if (savedKey) setApiKeySaved(true);
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) { const p=JSON.parse(saved); setBets(p); localNextId=Math.max(...p.map(b=>b.id),7)+1; }
+      else { setBets(INITIAL_BETS); localStorage.setItem(STORAGE_KEY,JSON.stringify(INITIAL_BETS)); }
+    } catch { setBets(INITIAL_BETS); }
+    try {
+      const savedFunds = localStorage.getItem(FUNDS_KEY);
+      if (savedFunds) setDeposits(JSON.parse(savedFunds));
+    } catch {}
+    setLoaded(true);
+  },[]);
+
+  function persist(nb){ localStorage.setItem(STORAGE_KEY,JSON.stringify(nb)); }
+  function updateBets(nb){ setBets(nb); persist(nb); }
+  function persistFunds(nd){ localStorage.setItem(FUNDS_KEY,JSON.stringify(nd)); }
+  function addDeposit(){
+    const amt = parseFloat(fundsAmount);
+    if (!fundsPerson || isNaN(amt) || amt <= 0) return;
+    const nd = [...deposits, { id: Date.now(), person: fundsPerson, amount: amt, date: new Date().toISOString() }];
+    setDeposits(nd); persistFunds(nd);
+    setShowFundsModal(false); setFundsAmount(""); setFundsPerson("");
+    showToast(`$${amt.toFixed(2)} added from ${fundsPerson}!`);
+  }
+  function removeDeposit(id){
+    const nd = deposits.filter(d=>d.id!==id); setDeposits(nd); persistFunds(nd);
+  }
+  function saveName(){ if(!nameInput)return; setUserName(nameInput); localStorage.setItem(NAME_KEY,nameInput); setShowNameModal(false); }
+  function saveApiKey(){
+    const k = apiKeyInput.trim();
+    if (!k.startsWith("sk-ant-")) { showToast("Invalid key — should start with sk-ant-"); return; }
+    localStorage.setItem(API_KEY_STORAGE, k);
+    setApiKeySaved(true); setShowApiModal(false); setApiKeyInput("");
+    showToast("API key saved! AI Scout is ready.");
+  }
+  function clearApiKey(){
+    localStorage.removeItem(API_KEY_STORAGE);
+    setApiKeySaved(false); showToast("API key removed.");
+  }
+  function showToast(msg){ setToast(msg); setTimeout(()=>setToast(""),2800); }
+
+  function exportBets(){
+    const payload = { bets, deposits };
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="wc2026-bets.json"; a.click(); URL.revokeObjectURL(url);
+    showToast("Saved! Send this file to sync.");
+  }
+  function importBets(e){
+    const file=e.target.files[0]; if(!file)return;
+    const r=new FileReader(); r.onload=ev=>{
+      try {
+        const raw=JSON.parse(ev.target.result);
+        const parsedBets  = Array.isArray(raw) ? raw : (raw.bets || []);
+        const parsedFunds = Array.isArray(raw) ? [] : (raw.deposits || []);
+        if(Array.isArray(parsedBets)){
+          updateBets(parsedBets); localNextId=Math.max(...parsedBets.map(b=>b.id),7)+1;
+          setDeposits(parsedFunds); persistFunds(parsedFunds);
+          showToast("File loaded!");
+        }
+      } catch{ showToast("Load failed."); }
+    }; r.readAsText(file); e.target.value="";
+  }
+
+  function openAdd(){ setForm({category:"Outright Winner",team:"",description:"",odds:"",stake:"",platform:"DraftKings",status:"Pending",note:""}); setEditingBet(null); setShowForm(true); }
+  function openEdit(bet){ setForm({...bet}); setEditingBet(bet.id); setShowForm(true); }
+  function saveBet(){
+    if(!form.team||!form.odds||!form.stake)return;
+    const next = editingBet ? bets.map(b=>b.id===editingBet?{...form,id:editingBet}:b) : [...bets,{...form,id:localNextId++}];
+    updateBets(next); setShowForm(false);
+  }
+  function deleteBet(id){ updateBets(bets.filter(b=>b.id!==id)); }
+  function updateStatus(id,status){ updateBets(bets.map(b=>b.id===id?{...b,status}:b)); }
+  function addParlayAsBet(p){
+    // Pre-fill the add form so user can confirm platform + stake before saving
+    setForm({
+      category:"Parlay",
+      team: p.name,
+      description: p.legs.join(" + "),
+      odds: p.estimatedOdds,
+      stake: p.suggestedStake,
+      platform: p.platform || "DraftKings",
+      status:"Pending",
+      note: p.rationale || ""
+    });
+    setEditingBet(null);
+    setShowForm(true);
+  }
+  function addScoutBet(play){
+    const next=[...bets,{id:localNextId++,category:"Outright Winner",team:play.bet,description:play.bet,odds:play.odds||"TBD",stake:play.suggestedStake||10,platform:"DraftKings",status:"Pending",note:play.rationale||""}];
+    updateBets(next); setActiveTab("bets"); showToast(`"${play.bet}" added!`);
+  }
+
+  // Scout
+  async function runOddsRefresh(){
+    setOddsLoading(true); setOddsRefresh([]);
+    const tracked=bets.filter(b=>b.status==="Pending"||b.status==="Placed").map(b=>`${b.team} (${b.description}) logged at ${b.odds}`).join("\n");
+    try {
+      const raw=await callAI("Return ONLY a raw JSON array. No markdown. Each: {\"bet\":string,\"loggedOdds\":string,\"currentOdds\":string,\"moved\":\"up\"|\"down\"|\"same\",\"movePct\":string,\"alert\":string}",
+        `Search current 2026 World Cup odds for:\n${tracked}\nReturn JSON array starting with [.`);
+      const p=parseJSON(raw);
+      if(p&&Array.isArray(p)&&p.length>0){ setOddsRefresh(p); setOddsTs(new Date()); }
+      else throw new Error();
+    } catch {
+      setOddsRefresh(bets.filter(b=>b.status==="Pending"||b.status==="Placed").map(b=>({bet:b.team,loggedOdds:b.odds,currentOdds:"Check manually",moved:"same",movePct:"—",alert:""})));
+      setOddsTs(new Date());
+    }
+    setOddsLoading(false);
+  }
+
+  async function runTopPlays(){
+    setTopLoading(true); setTopPlays([]);
+    try {
+      const raw=await callAI("Return ONLY a raw JSON array of 10 items. No markdown. Each: {\"rank\":number,\"bet\":string,\"odds\":string,\"category\":string,\"rationale\":string,\"suggestedStake\":number,\"edge\":\"High\"|\"Medium\"|\"Speculative\"}",
+        "Search top 10 best value 2026 World Cup bets right now — outrights, group stage, player props, specials. Return JSON array starting with [.");
+      const p=parseJSON(raw);
+      if(p&&Array.isArray(p)&&p.length>0){ setTopPlays(p); setTopTs(new Date()); }
+      else throw new Error();
+    } catch {
+      setTopPlays([{rank:1,bet:"Search unavailable",odds:"—",category:"—",rationale:"Live search failed. Try again.",suggestedStake:0,edge:"Medium"}]);
+      setTopTs(new Date());
+    }
+    setTopLoading(false);
+  }
+
+  async function runPolymarket(){
+    setPolyLoading(true); setPolyData([]);
+    try {
+      const raw=await callAI("Return ONLY a raw JSON array. No markdown. Each: {\"team\":string,\"event\":string,\"polymarketProb\":number,\"bookOdds\":string,\"bookImpliedProb\":number,\"edge\":number,\"direction\":\"BET\"|\"FADE\"|\"NEUTRAL\",\"insight\":string}",
+        "Search Polymarket 2026 World Cup markets and sportsbook outright odds. Find biggest discrepancies. Return 8 items as JSON array starting with [.");
+      const p=parseJSON(raw);
+      if(p&&Array.isArray(p)&&p.length>0){ setPolyData(p); setPolyTs(new Date()); }
+      else throw new Error();
+    } catch {
+      setPolyData([{team:"Unavailable",event:"—",polymarketProb:0,bookOdds:"—",bookImpliedProb:0,edge:0,direction:"NEUTRAL",insight:"Live search failed. Try again."}]);
+      setPolyTs(new Date());
+    }
+    setPolyLoading(false);
+  }
+
+  // ── Derived numbers ────────────────────────────────────────────────────────
+  const totalDeposited = deposits.reduce((s,d)=>s+d.amount, 0);
+  const pool = calcPool(bets, totalDeposited);
+  const liveBets      = bets.filter(b=>b.status==="Placed");
+  const completedBets = bets.filter(b=>["Won","Lost","Cashed Out"].includes(b.status));
+  const pendingBets   = bets.filter(b=>b.status==="Pending");
+  const filtered = activeCategory==="All" ? bets : bets.filter(b=>b.category===activeCategory);
+
+  const pnlColor = pool.pnl>0?"#10b981":pool.pnl<0?"#ef4444":"#c8f5d4";
+  const poolColor = pool.pool>totalDeposited?"#10b981":pool.pool<totalDeposited*0.5?"#ef4444":"#f59e0b";
+
+  if(!loaded) return <div style={{minHeight:"100vh",background:"#0a0f0d",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{color:"#2d7a45",fontFamily:"monospace",fontSize:11,letterSpacing:4}}>LOADING...</div></div>;
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0a0f0d",color:"#e8f5e9",fontFamily:"'DM Mono','Courier New',monospace"}}>
+
+      {/* TOAST */}
+      {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",background:"#10b981",color:"#0a0f0d",padding:"10px 20px",borderRadius:6,fontSize:11,letterSpacing:2,zIndex:300,fontWeight:600,whiteSpace:"nowrap",boxShadow:"0 4px 20px #10b98155"}}>{toast}</div>}
+
+      {/* NAME MODAL */}
+      {showNameModal&&(
+        <div style={{position:"fixed",inset:0,background:"#000d",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
+          <div style={{background:"#0d1a10",border:"1px solid #2d7a45",borderRadius:10,padding:28,width:320,textAlign:"center"}}>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:"#c8f5d4",letterSpacing:2,marginBottom:4}}>WHO ARE YOU?</div>
+            <div style={{fontSize:10,color:"#3d6b4a",letterSpacing:2,marginBottom:16}}>SELECT YOUR NAME</div>
+            <select value={nameInput} onChange={e=>setNameInput(e.target.value)}
+              style={{width:"100%",background:"#0a1a0f",border:"1px solid #1a3a24",color:nameInput?"#c8f5d4":"#3d6b4a",borderRadius:6,padding:"10px 14px",fontSize:14,fontFamily:"inherit",marginBottom:12,cursor:"pointer"}}>
+              <option value="" disabled>Select your name...</option>
+              {PLAYERS.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+            <button onClick={saveName} disabled={!nameInput} className="btn"
+              style={{width:"100%",background:nameInput?"#10b981":"#1a3a24",color:nameInput?"#0a0f0d":"#3d6b4a",borderRadius:6,padding:10,fontSize:11,letterSpacing:2,fontFamily:"inherit",fontWeight:600}}>
+              LET'S GO ⚽
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* FUNDS MODAL */}
+      {showFundsModal&&(
+        <div style={{position:"fixed",inset:0,background:"#000d",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
+          <div style={{background:"#0d1a10",border:"1px solid #2d7a45",borderRadius:10,padding:28,width:340,textAlign:"center"}}>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:"#c8f5d4",letterSpacing:2,marginBottom:4}}>ADD FUNDS</div>
+            <div style={{fontSize:10,color:"#3d6b4a",letterSpacing:2,marginBottom:18}}>WHO IS PUTTING MONEY IN?</div>
+            <div style={{fontSize:9,letterSpacing:3,color:"#3d6b4a",marginBottom:6,textAlign:"left"}}>FROM</div>
+            <select value={fundsPerson} onChange={e=>setFundsPerson(e.target.value)}
+              style={{width:"100%",background:"#0a1a0f",border:"1px solid #1a3a24",color:fundsPerson?"#c8f5d4":"#3d6b4a",borderRadius:6,padding:"10px 14px",fontSize:13,fontFamily:"inherit",marginBottom:14,cursor:"pointer"}}>
+              <option value="" disabled>Select name...</option>
+              {PLAYERS.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+            <div style={{fontSize:9,letterSpacing:3,color:"#3d6b4a",marginBottom:6,textAlign:"left"}}>AMOUNT ($)</div>
+            <input type="number" value={fundsAmount} onChange={e=>setFundsAmount(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addDeposit()}
+              placeholder="e.g. 100" min="1"
+              style={{width:"100%",background:"#0a1a0f",border:"1px solid #1a3a24",color:"#c8f5d4",borderRadius:6,padding:"10px 14px",fontSize:18,fontFamily:"'Bebas Neue',sans-serif",marginBottom:18,letterSpacing:1}} />
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setShowFundsModal(false);setFundsAmount("");setFundsPerson("");}} className="btn"
+                style={{flex:1,background:"#1a2e1f",color:"#5a8f6a",borderRadius:6,padding:10,fontSize:11,letterSpacing:2,fontFamily:"inherit"}}>CANCEL</button>
+              <button onClick={addDeposit} disabled={!fundsPerson||!fundsAmount} className="btn"
+                style={{flex:2,background:(fundsPerson&&fundsAmount)?"#10b981":"#1a3a24",color:(fundsPerson&&fundsAmount)?"#0a0f0d":"#3d6b4a",borderRadius:6,padding:10,fontSize:11,letterSpacing:2,fontFamily:"inherit",fontWeight:600}}>
+                ADD TO POOL 💰
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* API KEY MODAL */}
+      {showApiModal&&(
+        <div style={{position:"fixed",inset:0,background:"#000d",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
+          <div style={{background:"#0d1a10",border:"1px solid #2d7a45",borderRadius:10,padding:28,width:380,textAlign:"center"}}>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:"#c8f5d4",letterSpacing:2,marginBottom:4}}>AI SCOUT SETUP</div>
+            <div style={{fontSize:10,color:"#3d6b4a",letterSpacing:1,marginBottom:12,lineHeight:1.8}}>
+              Paste your Anthropic API key to power the Scout.<br/>
+              Get one free at <span style={{color:"#2d7a45"}}>console.anthropic.com</span><br/>
+              <span style={{color:"#1e4d2b",fontSize:9}}>Stays in your browser only — never sent anywhere else.</span>
+            </div>
+            <div style={{background:"#0a1a0f",border:"1px solid #1a3a24",borderRadius:6,padding:"10px 12px",marginBottom:14,fontSize:9,color:"#2d7a45",letterSpacing:1,textAlign:"left",lineHeight:1.9}}>
+              1. Go to <strong>console.anthropic.com</strong> → API Keys<br/>
+              2. Click "Create Key" → copy it<br/>
+              3. Paste below — key starts with <strong>sk-ant-</strong>
+            </div>
+            <input value={apiKeyInput} onChange={e=>setApiKeyInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveApiKey()}
+              placeholder="sk-ant-api03-..." type="password"
+              style={{width:"100%",background:"#0a1a0f",border:"1px solid #1a3a24",color:"#c8f5d4",borderRadius:6,padding:"10px 14px",fontSize:12,fontFamily:"inherit",marginBottom:12,letterSpacing:1}} />
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setShowApiModal(false);setApiKeyInput("");}} className="btn"
+                style={{flex:1,background:"#1a2e1f",color:"#5a8f6a",borderRadius:6,padding:10,fontSize:11,letterSpacing:2,fontFamily:"inherit"}}>CANCEL</button>
+              <button onClick={saveApiKey} className="btn"
+                style={{flex:2,background:"#10b981",color:"#0a0f0d",borderRadius:6,padding:10,fontSize:11,letterSpacing:2,fontFamily:"inherit",fontWeight:600}}>SAVE KEY 🔑</button>
+            </div>
+            {apiKeySaved&&(
+              <button onClick={()=>{clearApiKey();setShowApiModal(false);}} className="btn"
+                style={{marginTop:10,background:"none",color:"#ef4444",fontSize:9,letterSpacing:2,fontFamily:"inherit",padding:0}}>
+                REMOVE SAVED KEY
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div style={{background:"linear-gradient(135deg,#0d1f12,#0a0f0d)",borderBottom:"1px solid #1a3a24",padding:"14px 24px"}}>
+        <div style={{maxWidth:960,margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          <div>
+            <div style={{fontSize:10,letterSpacing:4,color:"#2d7a45",marginBottom:2}}>WAYNE × TOMMY</div>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:28,letterSpacing:2,color:"#c8f5d4",lineHeight:1}}>WORLD CUP 2026 <span style={{fontSize:16,color:"#2d7a45"}}>BETTING SHEET</span></div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            {userName&&<div style={{fontSize:9,color:"#2d7a45",letterSpacing:2}}>👤 {userName.toUpperCase()} <button onClick={()=>{setNameInput("");setShowNameModal(true);}} className="btn" style={{background:"none",color:"#1e4d2b",fontSize:9,marginLeft:4,fontFamily:"inherit",padding:0}}>[switch]</button></div>}
+            <button onClick={()=>setShowApiModal(true)} className="btn"
+              style={{background:apiKeySaved?"#1a3a24":"#2a1a0a",color:apiKeySaved?"#10b981":"#f59e0b",borderRadius:6,padding:"5px 12px",fontSize:9,letterSpacing:2,fontFamily:"inherit",border:`1px solid ${apiKeySaved?"#10b98133":"#f59e0b33"}`}}>
+              {apiKeySaved?"🔑 SCOUT READY":"⚠ SETUP SCOUT"}
+            </button>
+            <button onClick={exportBets} className="btn" style={{background:"#1a3a24",color:"#a7d9b4",borderRadius:6,padding:"5px 12px",fontSize:9,letterSpacing:2,fontFamily:"inherit"}}>💾 SAVE &amp; SHARE</button>
+            <label className="btn" style={{background:"#1a3a24",color:"#a7d9b4",borderRadius:6,padding:"5px 12px",fontSize:9,letterSpacing:2,cursor:"pointer"}}>
+              📂 LOAD FILE <input type="file" accept=".json" onChange={importBets} style={{display:"none"}} />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div style={{maxWidth:960,margin:"0 auto",padding:"20px 24px"}}>
+
+        {/* ── TABS ───────────────────────────────────────────────────────────── */}
+        <div style={{display:"flex",gap:0,marginBottom:22,borderBottom:"1px solid #1a2e1f"}}>
+          {[{k:"dashboard",l:"📊 DASHBOARD"},{k:"bets",l:"📋 MY BETS"},{k:"parlays",l:"🔗 PARLAYS"},{k:"scout",l:"🔎 AI SCOUT"}].map(t=>(
+            <button key={t.k} onClick={()=>setActiveTab(t.k)} className="btn"
+              style={{background:"none",border:"none",borderBottom:activeTab===t.k?"2px solid #10b981":"2px solid transparent",color:activeTab===t.k?"#c8f5d4":"#3d6b4a",padding:"8px 16px",fontSize:10,letterSpacing:2,fontFamily:"inherit",marginBottom:"-1px",whiteSpace:"nowrap"}}>
+              {t.l}
+            </button>
+          ))}
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* DASHBOARD TAB                                                      */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {activeTab==="dashboard"&&(
+          <div>
+            {/* ── POOL + ADD FUNDS ────────────────────────────────────── */}
+            <div style={{background:"#0d1a10",border:"1px solid #1a3a24",borderRadius:10,padding:"22px 24px",marginBottom:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}>
+                <div style={{textAlign:"left"}}>
+                  <div style={{fontSize:10,letterSpacing:4,color:"#3d6b4a",marginBottom:6}}>CURRENT POOL BALANCE</div>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:64,color:poolColor,letterSpacing:2,lineHeight:1}}>${pool.pool.toFixed(2)}</div>
+                  <div style={{fontSize:10,color:"#3d6b4a",marginTop:6,letterSpacing:2}}>
+                    TOTAL DEPOSITED: <span style={{color:"#c8f5d4"}}>${totalDeposited.toFixed(2)}</span>
+                  </div>
+                </div>
+                <button onClick={()=>{setFundsPerson(userName||"");setShowFundsModal(true);}} className="btn"
+                  style={{background:"#10b981",color:"#0a0f0d",borderRadius:8,padding:"10px 20px",fontSize:11,letterSpacing:2,fontFamily:"inherit",fontWeight:700,alignSelf:"flex-start"}}>
+                  + ADD FUNDS 💰
+                </button>
+              </div>
+
+              {/* pool bar */}
+              {totalDeposited > 0 && (
+                <div style={{margin:"16px 0 4px"}}>
+                  <div style={{height:6,background:"#1a2e1f",borderRadius:3,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${Math.min(Math.max((pool.pool/totalDeposited)*100,0),100)}%`,background:pool.pool>=totalDeposited?"linear-gradient(90deg,#10b981,#2d7a45)":pool.pool<totalDeposited*0.5?"#ef4444":"linear-gradient(90deg,#f59e0b,#d97706)",borderRadius:3,transition:"width 0.5s"}} />
+                  </div>
+                  <div style={{fontSize:9,color:"#1e4d2b",letterSpacing:2,marginTop:6,textAlign:"center"}}>
+                    {pool.pool>totalDeposited?"▲ UP ON THE TOURNAMENT":pool.pool<totalDeposited?"▼ DOWN ON THE TOURNAMENT":"EVEN"}
+                  </div>
+                </div>
+              )}
+
+              {/* deposit log */}
+              {deposits.length > 0 && (
+                <div style={{marginTop:16,borderTop:"1px solid #1a2e1f",paddingTop:14}}>
+                  <div style={{fontSize:9,letterSpacing:3,color:"#3d6b4a",marginBottom:10}}>DEPOSIT LOG</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {deposits.map(d=>(
+                      <div key={d.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0a1a0f",borderRadius:6,padding:"8px 12px"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <span style={{fontSize:10,color:"#2d7a45"}}>👤</span>
+                          <span style={{fontSize:11,color:"#c8f5d4"}}>{d.person}</span>
+                          <span style={{fontSize:9,color:"#3d6b4a"}}>{new Date(d.date).toLocaleDateString("en-US",{month:"short",day:"numeric"})}</span>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:"#10b981"}}>+${d.amount.toFixed(2)}</span>
+                          <button onClick={()=>removeDeposit(d.id)} className="btn"
+                            style={{background:"none",color:"#2a1010",fontSize:14,padding:0,lineHeight:1}} title="Remove deposit">✕</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {deposits.length === 0 && (
+                <div style={{marginTop:14,textAlign:"center",padding:"16px 0",border:"1px dashed #1a2e1f",borderRadius:8}}>
+                  <div style={{fontSize:10,color:"#1e4d2b",letterSpacing:2}}>NO FUNDS ADDED YET</div>
+                  <div style={{fontSize:9,color:"#1a3a24",marginTop:4}}>Tap "+ Add Funds" to put money in the pool</div>
+                </div>
+              )}
+            </div>
+
+            {/* ── STAT GRID ───────────────────────────────────────────────── */}
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
+              <div className="dash-stat">
+                <div className="dash-label">MONEY IN</div>
+                <div className="dash-val" style={{color:"#f59e0b"}}>${pool.spent.toFixed(2)}</div>
+                <div className="dash-sub">Real cash placed so far</div>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-label">AT RISK</div>
+                <div className="dash-val" style={{color:"#3b82f6"}}>${pool.atRisk.toFixed(2)}</div>
+                <div className="dash-sub">{liveBets.length} live bet{liveBets.length!==1?"s":""} active</div>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-label">RETURNED</div>
+                <div className="dash-val" style={{color:"#10b981"}}>${pool.returned.toFixed(2)}</div>
+                <div className="dash-sub">From wins &amp; cashouts</div>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-label">P&amp;L</div>
+                <div className="dash-val" style={{color:pnlColor}}>{pool.pnl>=0?"+":""}{pool.pnl.toFixed(2)}</div>
+                <div className="dash-sub">On settled bets</div>
+              </div>
+            </div>
+
+            {/* ── QUICK COUNTS ────────────────────────────────────────────── */}
+            <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
+              {[
+                {label:"PENDING",count:pendingBets.length,color:"#f59e0b"},
+                {label:"LIVE",count:liveBets.length,color:"#3b82f6"},
+                {label:"WON",count:bets.filter(b=>b.status==="Won").length,color:"#10b981"},
+                {label:"LOST",count:bets.filter(b=>b.status==="Lost").length,color:"#ef4444"},
+                {label:"CASHED OUT",count:bets.filter(b=>b.status==="Cashed Out").length,color:"#8b5cf6"},
+              ].map(s=>(
+                <div key={s.label} style={{background:"#0d1a10",border:`1px solid ${s.color}33`,borderRadius:6,padding:"6px 14px",display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:s.color}}>{s.count}</div>
+                  <div style={{fontSize:9,color:s.color,letterSpacing:2,opacity:.8}}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* ── LIVE BETS ────────────────────────────────────────────────── */}
+            <div style={{marginBottom:24}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div className="section-title">🔵 LIVE BETS</div>
+                <button onClick={()=>{setActiveTab("bets");setActiveCategory("All");}} className="btn"
+                  style={{background:"none",border:"1px solid #1a3a24",color:"#3d6b4a",borderRadius:5,padding:"4px 10px",fontSize:9,letterSpacing:2,fontFamily:"inherit"}}>
+                  MANAGE ALL →
+                </button>
+              </div>
+              {liveBets.length===0
+                ? <div style={{textAlign:"center",padding:"28px 0",color:"#1e4d2b",fontSize:10,letterSpacing:2,border:"1px dashed #1a2e1f",borderRadius:8}}>NO LIVE BETS YET — PLACE YOUR FIRST BET!</div>
+                : liveBets.map(bet=>(
+                  <BetCard key={bet.id} bet={bet} onStatus={updateStatus} onEdit={openEdit} onDelete={deleteBet} compact={false} />
+                ))
+              }
+            </div>
+
+            {/* ── COMPLETED BETS ───────────────────────────────────────────── */}
+            <div>
+              <div className="section-title">✅ COMPLETED BETS</div>
+              {completedBets.length===0
+                ? <div style={{textAlign:"center",padding:"28px 0",color:"#1e4d2b",fontSize:10,letterSpacing:2,border:"1px dashed #1a2e1f",borderRadius:8}}>NO COMPLETED BETS YET</div>
+                : completedBets.map(bet=>{
+                    const sc = STATUS_COLORS[bet.status];
+                    const payout = calcPayout(parseFloat(bet.stake),bet.odds);
+                    const isWin = bet.status==="Won"||bet.status==="Cashed Out";
+                    return (
+                      <div key={bet.id} style={{background:"#0d1a10",border:`1px solid ${sc}33`,borderRadius:8,padding:"12px 16px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                        <div style={{flex:1,minWidth:160}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                            <span className="tag" style={{background:sc+"22",color:sc,border:`1px solid ${sc}44`}}>{bet.status.toUpperCase()}</span>
+                            <span style={{fontSize:10,color:"#3d6b4a",letterSpacing:1}}>{CATEGORY_ICONS[bet.category]}</span>
+                          </div>
+                          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:"#c8f5d4",letterSpacing:1}}>{bet.team}</div>
+                          <div style={{fontSize:10,color:"#5a8f6a"}}>{bet.description}</div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:10,color:"#3d6b4a"}}>Staked: <span style={{color:"#c8f5d4"}}>${bet.stake}</span></div>
+                          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:isWin?"#10b981":"#ef4444"}}>
+                            {isWin ? `+$${(payout).toFixed(2)}` : `-$${parseFloat(bet.stake).toFixed(2)}`}
+                          </div>
+                          <div style={{fontSize:9,color:"#3d6b4a",letterSpacing:1}}>{isWin?"PROFIT":"LOSS"}</div>
+                        </div>
+                        {/* quick status change */}
+                        <select value={bet.status} onChange={e=>updateStatus(bet.id,e.target.value)}
+                          style={{background:"#0a1a0f",border:"1px solid #1a3a24",color:sc,borderRadius:4,padding:"4px 8px",fontSize:10,fontFamily:"inherit",cursor:"pointer"}}>
+                          {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                    );
+                  })
+              }
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* MY BETS TAB                                                        */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {activeTab==="bets"&&(
+          <>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {["All",...CATEGORIES].map(cat=>(
+                  <button key={cat} onClick={()=>setActiveCategory(cat)} className="btn"
+                    style={{background:activeCategory===cat?"#1e4d2b":"#0d1a10",border:`1px solid ${activeCategory===cat?"#2d7a45":"#1a2e1f"}`,color:activeCategory===cat?"#c8f5d4":"#3d6b4a",borderRadius:4,padding:"5px 12px",fontSize:10,letterSpacing:2,fontFamily:"inherit"}}>
+                    {CATEGORY_ICONS[cat]||"📋"} {cat.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              <button onClick={openAdd} className="btn" style={{background:"#10b981",color:"#0a0f0d",borderRadius:6,padding:"7px 16px",fontSize:11,letterSpacing:2,fontFamily:"inherit",fontWeight:600}}>+ ADD BET</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:0}}>
+              {filtered.length===0&&<div style={{textAlign:"center",padding:40,color:"#3d6b4a",fontSize:11,letterSpacing:3}}>NO BETS IN THIS CATEGORY</div>}
+              {filtered.map(bet=><BetCard key={bet.id} bet={bet} onStatus={updateStatus} onEdit={openEdit} onDelete={deleteBet} compact={false} />)}
+            </div>
+          </>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* PARLAYS TAB                                                        */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {activeTab==="parlays"&&(
+          <div>
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:13,color:"#c8f5d4",marginBottom:3}}>Parlay Ideas</div>
+              <div style={{fontSize:10,letterSpacing:1,color:"#3d6b4a"}}>Curated suggestions · Tap "+ Add to My Bets" to track one</div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {parlays.map(p=>{
+                const payout=calcPayout(p.suggestedStake,p.estimatedOdds);
+                return (
+                  <div key={p.id} className="card" style={{background:"#0d1a10",borderRadius:8,padding:"16px 18px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
+                      <div style={{flex:1}}>
+                        <div style={{marginBottom:8}}><span className="tag" style={{background:RISK_COLORS[p.riskLevel]+"22",color:RISK_COLORS[p.riskLevel],border:`1px solid ${RISK_COLORS[p.riskLevel]}44`}}>{p.riskLevel.toUpperCase()} RISK</span></div>
+                        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:"#c8f5d4",letterSpacing:1,marginBottom:10}}>{p.name}</div>
+                        <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:10}}>
+                          {p.legs.map((leg,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:10,fontSize:11,color:"#a7d9b4"}}><span style={{color:"#2d7a45",fontSize:9,letterSpacing:2,minWidth:36}}>LEG {i+1}</span><span>{leg}</span></div>)}
+                        </div>
+                        <div style={{fontSize:10,color:"#3d6b4a",fontStyle:"italic",lineHeight:1.6}}>"{p.rationale}"</div>
+                        <div style={{marginTop:10,fontSize:10,color:"#3d6b4a",letterSpacing:1}}>📍 Best on: <span style={{color:"#a7d9b4"}}>{p.platform}</span></div>
+                      </div>
+                      <div style={{textAlign:"right",minWidth:120}}>
+                        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:30,color:"#10b981",letterSpacing:1}}>{p.estimatedOdds}</div>
+                        <div style={{fontSize:9,color:"#3d6b4a",letterSpacing:2,marginBottom:4}}>EST. ODDS</div>
+                        <div style={{fontSize:11,color:"#5a8f6a"}}>Suggested: <span style={{color:"#c8f5d4"}}>${p.suggestedStake}</span></div>
+                        <div style={{fontSize:11,color:"#5a8f6a"}}>Est. Win: <span style={{color:"#10b981"}}>+${payout.toFixed(0)}</span></div>
+                      </div>
+                    </div>
+                    <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #1a2e1f"}}>
+                      <button onClick={()=>addParlayAsBet(p)} className="btn" style={{background:"#1e4d2b",color:"#c8f5d4",borderRadius:6,padding:"6px 14px",fontSize:10,letterSpacing:2,fontFamily:"inherit"}}>+ REVIEW &amp; ADD TO MY BETS</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* AI SCOUT TAB                                                       */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {activeTab==="scout"&&(
+          <div>
+            <div style={{marginBottom:20}}>
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,color:"#c8f5d4",letterSpacing:2,marginBottom:4}}>🔎 AI SCOUT</div>
+              <div style={{fontSize:10,color:"#3d6b4a",letterSpacing:1}}>Live intelligence · Each section runs a fresh web search · For research only</div>
+            </div>
+
+            {!apiKeySaved&&(
+              <div style={{background:"#1a0f00",border:"1px solid #f59e0b44",borderRadius:8,padding:"14px 18px",marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+                <div>
+                  <div style={{fontSize:11,color:"#f59e0b",marginBottom:2}}>⚠ API Key Required</div>
+                  <div style={{fontSize:10,color:"#7a5a20",lineHeight:1.6}}>AI Scout needs your Anthropic API key to run live searches.<br/>Get a free key at console.anthropic.com</div>
+                </div>
+                <button onClick={()=>setShowApiModal(true)} className="btn"
+                  style={{background:"#f59e0b",color:"#0a0f0d",borderRadius:6,padding:"8px 16px",fontSize:10,letterSpacing:2,fontFamily:"inherit",fontWeight:600,whiteSpace:"nowrap"}}>
+                  🔑 SETUP NOW
+                </button>
+              </div>
+            )}
+
+            {/* Odds Refresh */}
+            <div className="scout-section">
+              <div className="scout-header">
+                <div>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:"#c8f5d4",letterSpacing:2}}>📊 ODDS REFRESH</div>
+                  <div style={{fontSize:10,color:"#3d6b4a",marginTop:2}}>Checks your tracked bets against current lines · Flags big moves</div>
+                  {oddsTs&&<div style={{fontSize:9,color:"#1e4d2b",marginTop:4,letterSpacing:1}}>Last run: {oddsTs.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</div>}
+                </div>
+                <button onClick={runOddsRefresh} disabled={oddsLoading} className="btn"
+                  style={{background:oddsLoading?"#1a3a24":"#1e4d2b",color:"#c8f5d4",borderRadius:6,padding:"8px 16px",fontSize:10,letterSpacing:2,fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}}>
+                  {oddsLoading?<><span className="spin">⟳</span> SCANNING...</>:"⚡ RUN REFRESH"}
+                </button>
+              </div>
+              {oddsLoading&&<div style={{display:"flex",flexDirection:"column",gap:6}}>{[1,2,3].map(i=><div key={i} className="shimmer" style={{height:50,borderRadius:6}} />)}</div>}
+              {!oddsLoading&&oddsRefresh.length===0&&<div style={{textAlign:"center",padding:"28px 0",color:"#1e4d2b",fontSize:10,letterSpacing:2}}>HIT "RUN REFRESH" TO CHECK YOUR CURRENT LINES</div>}
+              {!oddsLoading&&oddsRefresh.length>0&&(
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {oddsRefresh.map((item,i)=>{
+                    const up=item.moved==="up",down=item.moved==="down";
+                    const mc=up?"#10b981":down?"#ef4444":"#3d6b4a";
+                    return (
+                      <div key={i} style={{background:"#0a1a0f",border:`1px solid ${item.alert?"#f59e0b33":"#1a2e1f"}`,borderRadius:6,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                        <div><div style={{fontSize:12,color:"#c8f5d4",marginBottom:2}}>{item.bet}</div>{item.alert&&<div style={{fontSize:10,color:"#f59e0b"}}>⚠ {item.alert}</div>}</div>
+                        <div style={{display:"flex",gap:16,alignItems:"center"}}>
+                          <div style={{textAlign:"center"}}><div style={{fontSize:9,color:"#3d6b4a",letterSpacing:1,marginBottom:2}}>LOGGED</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:"#5a8f6a"}}>{item.loggedOdds}</div></div>
+                          <div style={{fontSize:18,color:mc}}>{up?"▲":down?"▼":"—"}</div>
+                          <div style={{textAlign:"center"}}><div style={{fontSize:9,color:"#3d6b4a",letterSpacing:1,marginBottom:2}}>CURRENT</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:mc}}>{item.currentOdds}</div></div>
+                          {item.movePct&&item.movePct!=="—"&&<div style={{fontSize:9,color:mc,letterSpacing:1}}>{item.movePct}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Top 10 */}
+            <div className="scout-section">
+              <div className="scout-header">
+                <div>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:"#c8f5d4",letterSpacing:2}}>🏅 TOP 10 VALUE PLAYS</div>
+                  <div style={{fontSize:10,color:"#3d6b4a",marginTop:2}}>Sharp money + analyst picks across all markets right now</div>
+                  {topTs&&<div style={{fontSize:9,color:"#1e4d2b",marginTop:4,letterSpacing:1}}>Last run: {topTs.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</div>}
+                </div>
+                <button onClick={runTopPlays} disabled={topLoading} className="btn"
+                  style={{background:topLoading?"#1a3a24":"#1e4d2b",color:"#c8f5d4",borderRadius:6,padding:"8px 16px",fontSize:10,letterSpacing:2,fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}}>
+                  {topLoading?<><span className="spin">⟳</span> SEARCHING...</>:"⚡ GET TOP 10"}
+                </button>
+              </div>
+              {topLoading&&<div style={{display:"flex",flexDirection:"column",gap:6}}>{[1,2,3,4,5].map(i=><div key={i} className="shimmer" style={{height:70,borderRadius:6}} />)}</div>}
+              {!topLoading&&topPlays.length===0&&<div style={{textAlign:"center",padding:"28px 0",color:"#1e4d2b",fontSize:10,letterSpacing:2}}>HIT "GET TOP 10" FOR AI-CURATED SHARP PICKS</div>}
+              {!topLoading&&topPlays.length>0&&(
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {topPlays.map((play,i)=>(
+                    <div key={i} style={{background:"#0a1a0f",border:"1px solid #1a2e1f",borderRadius:6,padding:"12px 14px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+                        <div style={{flex:1}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+                            <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:"#2d7a45"}}>#{play.rank||i+1}</span>
+                            <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:"#c8f5d4",letterSpacing:1}}>{play.bet}</span>
+                            {play.edge&&<span className="tag" style={{background:EDGE_COLORS[play.edge]+"22",color:EDGE_COLORS[play.edge],border:`1px solid ${EDGE_COLORS[play.edge]}44`}}>{play.edge?.toUpperCase()} EDGE</span>}
+                            {play.category&&<span className="tag" style={{background:"#1a2e1f",color:"#3d6b4a",border:"1px solid #1a2e1f"}}>{play.category}</span>}
+                          </div>
+                          <div style={{fontSize:11,color:"#a7d9b4",lineHeight:1.6,marginBottom:8}}>{play.rationale}</div>
+                        </div>
+                        <div style={{textAlign:"right",minWidth:90}}>
+                          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:"#10b981",letterSpacing:1}}>{play.odds}</div>
+                          {play.suggestedStake>0&&<div style={{fontSize:10,color:"#3d6b4a"}}>Suggest ${play.suggestedStake}</div>}
+                        </div>
+                      </div>
+                      <button onClick={()=>addScoutBet(play)} className="btn"
+                        style={{background:"#1e4d2b",color:"#c8f5d4",borderRadius:5,padding:"5px 12px",fontSize:9,letterSpacing:2,fontFamily:"inherit"}}>
+                        + ADD TO MY BETS
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Polymarket */}
+            <div className="scout-section">
+              <div className="scout-header">
+                <div>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:"#c8f5d4",letterSpacing:2}}>📈 POLYMARKET PULSE</div>
+                  <div style={{fontSize:10,color:"#3d6b4a",marginTop:2}}>Prediction market vs. sportsbook · +edge = underpriced by books</div>
+                  {polyTs&&<div style={{fontSize:9,color:"#1e4d2b",marginTop:4,letterSpacing:1}}>Last run: {polyTs.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</div>}
+                </div>
+                <button onClick={runPolymarket} disabled={polyLoading} className="btn"
+                  style={{background:polyLoading?"#1a3a24":"#1e4d2b",color:"#c8f5d4",borderRadius:6,padding:"8px 16px",fontSize:10,letterSpacing:2,fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}}>
+                  {polyLoading?<><span className="spin">⟳</span> FETCHING...</>:"⚡ RUN PULSE"}
+                </button>
+              </div>
+              {polyLoading&&<div style={{display:"flex",flexDirection:"column",gap:6}}>{[1,2,3,4].map(i=><div key={i} className="shimmer" style={{height:60,borderRadius:6}} />)}</div>}
+              {!polyLoading&&polyData.length===0&&<div style={{textAlign:"center",padding:"28px 0",color:"#1e4d2b",fontSize:10,letterSpacing:2}}>HIT "RUN PULSE" TO COMPARE POLYMARKET VS SPORTSBOOKS</div>}
+              {!polyLoading&&polyData.length>0&&(
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  <div style={{display:"flex",gap:12,marginBottom:8,flexWrap:"wrap"}}>
+                    {[["BET","#10b981","Underpriced by books"],["FADE","#ef4444","Overpriced by books"],["NEUTRAL","#3d6b4a","Markets aligned"]].map(([d,c,desc])=>(
+                      <div key={d} style={{display:"flex",alignItems:"center",gap:4}}>
+                        <span className="tag" style={{background:c+"22",color:c,border:`1px solid ${c}44`}}>{d}</span>
+                        <span style={{fontSize:9,color:"#3d6b4a"}}>{desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {polyData.map((item,i)=>{
+                    const ec=Math.abs(item.edge)>5?(item.edge>0?"#10b981":"#ef4444"):"#f59e0b";
+                    return (
+                      <div key={i} style={{background:"#0a1a0f",border:`1px solid ${DIR_COLORS[item.direction]||"#1a2e1f"}33`,borderRadius:6,padding:"10px 14px"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                              <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:15,color:"#c8f5d4",letterSpacing:1}}>{item.team}</span>
+                              <span className="tag" style={{background:(DIR_COLORS[item.direction]||"#3d6b4a")+"22",color:DIR_COLORS[item.direction]||"#3d6b4a",border:`1px solid ${DIR_COLORS[item.direction]||"#3d6b4a"}44`}}>{item.direction}</span>
+                            </div>
+                            <div style={{fontSize:10,color:"#5a8f6a",marginBottom:4}}>{item.event}</div>
+                            <div style={{fontSize:10,color:"#a7d9b4",lineHeight:1.5}}>{item.insight}</div>
+                          </div>
+                          <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                            <div style={{textAlign:"center"}}><div style={{fontSize:9,color:"#3d6b4a",letterSpacing:1,marginBottom:2}}>POLYMARKET</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:"#8b5cf6"}}>{item.polymarketProb}%</div></div>
+                            <div style={{textAlign:"center"}}><div style={{fontSize:9,color:"#3d6b4a",letterSpacing:1,marginBottom:2}}>BOOK</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:"#5a8f6a"}}>{item.bookImpliedProb}%</div></div>
+                            <div style={{textAlign:"center"}}><div style={{fontSize:9,color:"#3d6b4a",letterSpacing:1,marginBottom:2}}>EDGE</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:ec}}>{item.edge>0?"+":""}{item.edge}%</div></div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div style={{marginTop:24,textAlign:"center",fontSize:9,letterSpacing:3,color:"#1e4d2b"}}>PLEASE GAMBLE RESPONSIBLY · 21+ ONLY · AI SCOUT FOR RESEARCH ONLY</div>
+      </div>
+
+      {/* ADD/EDIT MODAL */}
+      {showForm&&(
+        <div style={{position:"fixed",inset:0,background:"#000a",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16}}>
+          <div style={{background:"#0d1a10",border:"1px solid #2d7a45",borderRadius:10,padding:24,width:"100%",maxWidth:460,maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:"#c8f5d4",letterSpacing:2,marginBottom:18}}>{editingBet?"EDIT BET":"ADD BET"}</div>
+            {[
+              {label:"CATEGORY",field:"category",type:"select",opts:CATEGORIES},
+              {label:"TEAM / NAME",field:"team",type:"text",ph:"e.g. Spain"},
+              {label:"DESCRIPTION",field:"description",type:"text",ph:"e.g. To win the World Cup"},
+              {label:"ODDS (American)",field:"odds",type:"text",ph:"e.g. +550 or -110"},
+              {label:"STAKE ($)",field:"stake",type:"number",ph:"e.g. 20"},
+              {label:"PLATFORM",field:"platform",type:"select",opts:PLATFORMS},
+              {label:"STATUS",field:"status",type:"select",opts:STATUSES},
+              {label:"NOTE (optional)",field:"note",type:"text",ph:"e.g. Strong value play"},
+            ].map(({label,field,type,opts,ph})=>(
+              <div key={field} style={{marginBottom:12}}>
+                <div style={{fontSize:9,letterSpacing:3,color:"#3d6b4a",marginBottom:4}}>{label}</div>
+                {type==="select"
+                  ? <select value={form[field]} onChange={e=>setForm(f=>({...f,[field]:e.target.value}))}
+                      style={{width:"100%",background:"#0a1a0f",border:"1px solid #1a3a24",color:"#c8f5d4",borderRadius:6,padding:"9px 12px",fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>
+                      {opts.map(o=><option key={o} value={o}>{o}</option>)}
+                    </select>
+                  : <input type={type} value={form[field]} placeholder={ph} onChange={e=>setForm(f=>({...f,[field]:e.target.value}))}
+                      style={{width:"100%",background:"#0a1a0f",border:"1px solid #1a3a24",color:"#c8f5d4",borderRadius:6,padding:"9px 12px",fontSize:12,fontFamily:"inherit"}} />
+                }
+              </div>
+            ))}
+            {form.odds&&form.stake&&(
+              <div style={{background:"#0a1a0f",border:"1px solid #1a3a24",borderRadius:6,padding:10,marginBottom:14,fontSize:11,color:"#5a8f6a"}}>
+                Win: <span style={{color:"#10b981",fontFamily:"'Bebas Neue',sans-serif",fontSize:16}}>+${calcPayout(parseFloat(form.stake),form.odds).toFixed(2)}</span>
+                &nbsp;· Total: <span style={{color:"#c8f5d4"}}>${(calcPayout(parseFloat(form.stake),form.odds)+parseFloat(form.stake||0)).toFixed(2)}</span>
+              </div>
+            )}
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setShowForm(false)} className="btn" style={{flex:1,background:"#1a2e1f",color:"#5a8f6a",borderRadius:6,padding:10,fontSize:11,letterSpacing:2,fontFamily:"inherit"}}>CANCEL</button>
+              <button onClick={saveBet} className="btn" style={{flex:2,background:"#10b981",color:"#0a0f0d",borderRadius:6,padding:10,fontSize:11,letterSpacing:2,fontFamily:"inherit",fontWeight:600}}>{editingBet?"SAVE CHANGES":"ADD BET"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
